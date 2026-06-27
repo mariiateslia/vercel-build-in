@@ -10,6 +10,15 @@ Built on Vercel's [**eve**](https://eve.dev) agent framework (model via AI Gatew
 Next.js app that exposes a strict-contract HTTP endpoint. The UI is built separately in
 **v0** and talks to this endpoint.
 
+## Two surfaces
+
+- **Primary — structured review + v0 UI.** `POST /api/review` takes `{ notes }` and returns
+  the strict `FsReview` JSON contract; the v0 app renders it as a 6-step timeline → result
+  cards. This is the headline demo flow.
+- **Secondary — conversational agent.** `agent/instructions.md` drives a multi-turn,
+  PDF-driven review on eve's native REPL + chat UI. Kept as a bonus surface; the primary
+  endpoint does **not** depend on it.
+
 ## Architecture
 
 - `agent/instructions.md` — the **conversational** FS Copilot agent (greet → analyze PDF →
