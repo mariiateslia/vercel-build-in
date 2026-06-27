@@ -12,13 +12,15 @@ Next.js app that exposes a strict-contract HTTP endpoint. The UI is built separa
 
 ## Architecture
 
-- `agent/instructions.md` — the agent's identity + strict-output rules (system prompt).
+- `agent/instructions.md` — the **conversational** FS Copilot agent (greet → analyze PDF →
+  confirm understanding → ≤10 follow-ups → final deliverable). Drives the eve REPL + chat UI.
 - `agent/skills/disclosure-review.md` — the disclosure-review playbook (loaded on demand).
 - `agent/agent.ts` — model config (`anthropic/claude-sonnet-4.6` via AI Gateway).
 - `agent/channels/eve.ts` — eve's native HTTP channel (`POST /eve/v1/session`).
 - `lib/contract.ts` — the **JSON contract** as a Zod schema + `FsReview` type (source of truth).
 - `lib/mock.ts`, `lib/sample-notes.ts` — mock-first demo data.
-- `app/api/review/route.ts` — the structured `{ notes } → FsReview` endpoint the UI calls.
+- `app/api/review/route.ts` — the structured `{ notes } → FsReview` endpoint the v0 UI calls.
+  Single-shot strict JSON; uses its own contract prompt (not the conversational instructions).
 - `docs/v0-prompt.md` — the v0 UI handoff kit (prompt + types + wiring).
 
 ## The contract

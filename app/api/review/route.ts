@@ -6,9 +6,22 @@ import { NextResponse } from "next/server";
 import { contractSchema, type FsReview } from "@/lib/contract";
 import { MOCK_REVIEW } from "@/lib/mock";
 
-// Reads agent/instructions.md and the skill from disk, so the API and the eve
-// agent stay driven by the same prompt. Needs the Node runtime for fs.
+// This endpoint is the single-shot, strict-JSON path for the v0 UI. It does NOT
+// use agent/instructions.md — those drive the conversational eve agent (greet,
+// ask for a PDF, multi-turn interview) and would corrupt structured output.
+// Instead it uses its own contract-focused prompt plus the disclosure-review
+// skill. Needs the Node runtime for fs.
 export const runtime = "nodejs";
+
+// Strict system prompt for one-shot contract generation (kept separate from the
+// conversational agent instructions).
+const CONTRACT_SYSTEM_PROMPT = `You are FS Copilot, an AI audit senior performing a disclosure review of draft financial-statement notes before partner review.
+
+You are not a chatbot here: you receive the full draft notes in one message and return a single structured review. Do NOT greet the user, ask for a PDF, or ask follow-up questions.
+
+Always (1) infer the company profile from the notes, then (2) evaluate the draft disclosures in that context. Be specific to THIS company — cite what the notes do and do not say. Frame findings against US GAAP / ASC topics. Findings should be the disclosures a partner is most likely to flag. Management questions must be answerable by management. The client email must be short and professional.
+
+Use professional, cautious language ("potentially missing", "consider adding", "may require disclosure", "based on the information provided"). Never claim the statements are definitively wrong or GAAP compliant. Never invent facts or fabricate disclosures.`;
 
 // Gateway model id (routes through Vercel AI Gateway). Mirrors agent/agent.ts.
 const MODEL = "anthropic/claude-sonnet-4.6";
@@ -35,18 +48,17 @@ let cachedSystemPrompt: string | null = null;
 
 function buildSystemPrompt(): string {
   if (cachedSystemPrompt) return cachedSystemPrompt;
-  const root = process.cwd();
-  const parts: string[] = [];
-  for (const rel of ["agent/instructions.md", "agent/skills/disclosure-review.md"]) {
-    try {
-      parts.push(readFileSync(join(root, rel), "utf8"));
-    } catch {
-      // Tolerate a missing file — the remaining instructions still guide output.
-    }
+  // Strict contract prompt + the disclosure-review playbook (the skill is a
+  // non-conversational checklist, so it stays useful for one-shot output).
+  let skill = "";
+  try {
+    skill = readFileSync(join(process.cwd(), "agent/skills/disclosure-review.md"), "utf8");
+  } catch {
+    // Tolerate a missing skill file — the contract prompt alone still guides output.
   }
-  cachedSystemPrompt =
-    parts.join("\n\n---\n\n") ||
-    "You are FsCopilot, an AI audit senior. Review draft financial statement notes and return the FsCopilot JSON contract.";
+  cachedSystemPrompt = skill
+    ? `${CONTRACT_SYSTEM_PROMPT}\n\n---\n\n${skill}`
+    : CONTRACT_SYSTEM_PROMPT;
   return cachedSystemPrompt;
 }
 
