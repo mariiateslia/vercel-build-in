@@ -24,7 +24,9 @@ Always (1) infer the company profile from the notes, then (2) evaluate the draft
 Use professional, cautious language ("potentially missing", "consider adding", "may require disclosure", "based on the information provided"). Never claim the statements are definitively wrong or GAAP compliant. Never invent facts or fabricate disclosures.`;
 
 // Gateway model id (routes through Vercel AI Gateway). Mirrors agent/agent.ts.
-const MODEL = "anthropic/claude-sonnet-4.6";
+// Default is claude-haiku-4.5 (accessible on free AI Gateway credits). Override
+// with FSCOPILOT_MODEL=anthropic/claude-sonnet-4.6 once paid credits are added.
+const MODEL = process.env.FSCOPILOT_MODEL ?? "anthropic/claude-haiku-4.5";
 
 // The v0 UI lives on a different origin, so allow cross-origin calls. Set
 // FSCOPILOT_ALLOWED_ORIGIN to lock this down to the deployed UI origin.
