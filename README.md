@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FsCopilot — Financial Statements Copilot
 
-## Getting Started
+> An AI audit senior performing a **disclosure review before partner review**.
 
-First, run the development server:
+FsCopilot takes draft financial-statement notes, infers the company profile, maps the
+applicable US GAAP / ASC topics, flags likely disclosure gaps, and returns a structured
+review — company profile, findings, management questions, and a draft client email.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Built on Vercel's [**eve**](https://eve.dev) agent framework (model via AI Gateway) with a
+Next.js app that exposes a strict-contract HTTP endpoint. The UI is built separately in
+**v0** and talks to this endpoint.
+
+## Architecture
+
+- `agent/instructions.md` — the agent's identity + strict-output rules (system prompt).
+- `agent/skills/disclosure-review.md` — the disclosure-review playbook (loaded on demand).
+- `agent/agent.ts` — model config (`anthropic/claude-sonnet-4.6` via AI Gateway).
+- `agent/channels/eve.ts` — eve's native HTTP channel (`POST /eve/v1/session`).
+- `lib/contract.ts` — the **JSON contract** as a Zod schema + `FsReview` type (source of truth).
+- `lib/mock.ts`, `lib/sample-notes.ts` — mock-first demo data.
+- `app/api/review/route.ts` — the structured `{ notes } → FsReview` endpoint the UI calls.
+- `docs/v0-prompt.md` — the v0 UI handoff kit (prompt + types + wiring).
+
+## The contract
+
+`POST /api/review` with `{ "notes": "<raw text>" }` returns:
+
+```ts
+type FsReview = {
+  companyProfile: { summary: string; attributes: string[] };
+  applicableTopics: { code: string; title: string; rationale: string }[];
+  findings: {
+    id: string; title: string;
+    status: "Found" | "Potentially Missing" | "Needs Clarification" | "Potentially Weak";
+    confidence: "High" | "Medium" | "Low";
+    whyItMatters: string; suggestedQuestion: string;
+  }[];
+  managementQuestions: string[];
+  clientEmail: { subject: string; body: string };
+};
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The response carries an `x-fscopilot-mode: mock | live` header.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Run it
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install            # already installed by `eve init`
+npm run dev            # Next.js + eve dev server on http://localhost:3000
+```
 
-## Learn More
+Test the endpoint (mock path works with no key):
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+curl -s -X POST http://localhost:3000/api/review \
+  -H 'content-type: application/json' \
+  -d '{"notes":"...draft notes..."}' | jq
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Mock-first → live
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The endpoint returns the built-in mock (`lib/mock.ts`) whenever there is **no**
+`AI_GATEWAY_API_KEY` set, when you pass `?mock=1`, or if a live call fails — so a demo
+always works. To go live:
 
-## Deploy on Vercel
+1. Copy `.env.example` → `.env.local` and set `AI_GATEWAY_API_KEY` (get one at
+   <https://vercel.com/ai-gateway>, or run `eve link` to pull credentials from a linked
+   Vercel project).
+2. Restart `npm run dev`. `/api/review` now returns model output (`x-fscopilot-mode: live`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The eve agent REPL (for interactive testing of the same agent) runs with:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm exec -- eve dev
+```
+
+## UI (v0)
+
+The UI is generated separately in v0. Import this repo into v0 (it gets the `FsReview` type
+and mock), then follow [`docs/v0-prompt.md`](docs/v0-prompt.md). The v0 app POSTs `{ notes }`
+to `/api/review` and renders the returned `FsReview` (6-step timeline → result cards).
