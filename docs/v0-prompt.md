@@ -26,9 +26,42 @@ spacing, restrained typography. NOT corporate-blue SaaS. No gradients-as-decorat
 **Layout — two columns, stack vertically on mobile.**
 
 **Left column — input**
-- A large textarea for draft financial-statement notes (monospace-ish, ~14 rows).
+- A large textarea for draft financial-statement notes (monospace-ish, ~14 rows). This
+  `notes` text is the single input — every entry method below just fills it.
+- An "Upload PDF" control (button or drag-and-drop zone) that extracts the document text
+  **client-side** and drops it into the notes textarea (see "PDF upload" below).
 - A subtle "Use sample notes" text button that fills the textarea with `SAMPLE_NOTES`.
 - A primary "Run disclosure review" button (disabled while running / when empty).
+
+Paste, "Use sample notes", and PDF upload are interchangeable ways to populate the same
+`notes` field — paste and sample notes remain the fallbacks if a PDF can't be read.
+
+**PDF upload (client-side text extraction)**
+- Use [`pdfjs-dist`](https://www.npmjs.com/package/pdfjs-dist) in the browser to extract text;
+  concatenate each page's text items into the `notes` textarea. Do **not** send the PDF to the
+  server — `/api/review` is unchanged and still receives only `{ notes: string }`.
+- **Text-based PDFs only, no OCR.** If extraction yields little or no text (e.g. a scanned/image
+  PDF), show a friendly message asking the user to paste the notes or use sample notes instead.
+- Sketch:
+
+  ```ts
+  import * as pdfjsLib from "pdfjs-dist";
+  // Point workerSrc at the bundled worker (e.g. pdfjs-dist/build/pdf.worker.min.mjs).
+
+  async function extractPdfText(file: File): Promise<string> {
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    let text = "";
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      text += content.items.map((it: any) => ("str" in it ? it.str : "")).join(" ") + "\n";
+    }
+    return text.trim();
+  }
+  // On file select: const notes = await extractPdfText(file);
+  // if (!notes) showFallbackMessage(); else setNotes(notes);
+  ```
 
 **Right column — progress + results**
 - An agent progress timeline of these 6 steps, animated in order, each with a state of
